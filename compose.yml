@@ -1,0 +1,24 @@
+services:
+  threat-intel-api:
+    image: python:3.12-slim
+    container_name: threat-intel-api
+    restart: unless-stopped
+    working_dir: /srv
+    volumes:
+      - ./app:/srv/app
+      - ./data:/data
+    ports:
+      - "8099:8099"
+    environment:
+      - DATABASE_PATH=/data/threat_intel.db
+      - OLLAMA_URL=${OLLAMA_URL:-http://localhost:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-mistral-small3.2:24b}
+      - ADMIN_TOKEN=${ADMIN_TOKEN}
+    command: >
+      bash -c "pip install --no-cache-dir -r /srv/app/requirements.txt &&
+               python -m uvicorn app.main:app --host 0.0.0.0 --port 8099 --log-level info"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8099/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
