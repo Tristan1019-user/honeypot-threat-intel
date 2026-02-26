@@ -1,0 +1,5 @@
+ijson==3.3.0
+psycopg[binary]==3.2.1
+python-dateutil==2.9.0.post0
+taxii2-client==2.3.0
+stix2==3.0.1

@@ -1,53 +1,75 @@
 services:
-  threat-intel-api:
-    build: .
-    image: threat-intel-api:local
-    container_name: threat-intel-api
-    restart: unless-stopped
-    mem_limit: 2g
-    cpus: "1.5"
-    depends_on:
-      threat-intel-db:
-        condition: service_healthy
-    volumes:
-      - ./data:/data
-      - ./data/logs:/cowrie/var/log/cowrie:ro
-    ports:
-      - "8099:8099"
-    environment:
-      - DATABASE_URL=postgresql://threatintel:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@threat-intel-db:5432/threat_intel
-      - OLLAMA_URL=${OLLAMA_URL:-http://192.168.10.97:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-mistral-small3.2:24b}
-      - ADMIN_TOKEN=${ADMIN_TOKEN}
-      - VT_API_KEY=${VT_API_KEY:-}
-      - ALLOW_SQLITE_FALLBACK=false
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8099/api/v1/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "3"
-
   threat-intel-db:
-    image: postgres:16-alpine
+    image: postgres:16
     container_name: threat-intel-db
     restart: unless-stopped
-    mem_limit: 2g
-    cpus: "1.0"
-    shm_size: 256m
     environment:
-      - POSTGRES_DB=threat_intel
-      - POSTGRES_USER=threatintel
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-threat_intel}
+      POSTGRES_USER: ${POSTGRES_USER:-threatintel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U threatintel -d threat_intel"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-threatintel} -d ${POSTGRES_DB:-threat_intel}"]
       interval: 10s
       timeout: 5s
       retries: 10
+
+  threat-intel-api:
+    build:
+      context: ./api
+    image: threat-intel-api:local
+    container_name: threat-intel-api
+    restart: unless-stopped
+    depends_on:
+      threat-intel-db:
+        condition: service_healthy
+    ports:
+      - "8099:8080"
+    environment:
+      DB_HOST: threat-intel-db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-threat_intel}
+      DB_USER: ${POSTGRES_USER:-threatintel}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      API_MAX_PAGE_SIZE: ${API_MAX_PAGE_SIZE:-500}
+      API_TOKEN: ${API_TOKEN:?set API_TOKEN in .env}
+      API_ENABLE_DOCS: ${API_ENABLE_DOCS:-false}
+      API_RATE_LIMIT: ${API_RATE_LIMIT:-120/minute}
+      API_ALLOWED_IPS: ${API_ALLOWED_IPS:-}
+
+  threat-intel-worker:
+    build:
+      context: ./worker
+    container_name: threat-intel-worker
+    restart: unless-stopped
+    depends_on:
+      threat-intel-db:
+        condition: service_healthy
+    environment:
+      DB_HOST: threat-intel-db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-threat_intel}
+      DB_USER: ${POSTGRES_USER:-threatintel}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      STIX_INBOX_DIR: /data/inbox
+      STIX_ARCHIVE_DIR: /data/archive
+      STIX_QUARANTINE_DIR: /data/quarantine
+      STIX_BATCH_SIZE: ${STIX_BATCH_SIZE:-500}
+      STIX_MAX_FILE_MB: ${STIX_MAX_FILE_MB:-1024}
+      POLL_SECONDS: ${POLL_SECONDS:-30}
+      TAXII_ENABLED: ${TAXII_ENABLED:-false}
+      TAXII_DISCOVERY_URL: ${TAXII_DISCOVERY_URL:-}
+      TAXII_API_ROOT: ${TAXII_API_ROOT:-}
+      TAXII_COLLECTION_ID: ${TAXII_COLLECTION_ID:-}
+      TAXII_USERNAME: ${TAXII_USERNAME:-}
+      TAXII_PASSWORD: ${TAXII_PASSWORD:-}
+      TAXII_TOKEN: ${TAXII_TOKEN:-}
+      TAXII_VERIFY_TLS: ${TAXII_VERIFY_TLS:-true}
+      TAXII_POLL_SECONDS: ${TAXII_POLL_SECONDS:-900}
+      TAXII_BACKOFF_MIN_SECONDS: ${TAXII_BACKOFF_MIN_SECONDS:-60}
+      TAXII_BACKOFF_MAX_SECONDS: ${TAXII_BACKOFF_MAX_SECONDS:-3600}
+    volumes:
+      - ./data:/data
+    command: ["python", "worker.py", "--watch"]

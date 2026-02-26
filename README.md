@@ -20,6 +20,16 @@ No API key required. Current rate limit: 100 req/min.
 
 ## Quick Start
 
+## STIX v2.2 ingestion/API hardening
+This repo now includes a hardened STIX pipeline:
+- `api/` FastAPI service with bearer auth, rate limiting, optional IP allowlist, structured logs
+- `worker/` streaming ingest + TAXII incremental sync (`added_after`) with exponential backoff
+- `db/init.sql` schema for STIX objects, relationships, and ingest checkpoints/runs
+- `deploy/` Caddy and fail2ban examples for public-facing deployment
+
+Use `compose.yml` + `.env.example` for deployment.
+
+
 ```bash
 # Latest indicators
 curl -s https://threat-intel.101904.xyz/api/v1/feed?since=24h | jq .

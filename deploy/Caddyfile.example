@@ -1,0 +1,30 @@
+# Replace api.example.com and token policy to match your environment
+api.example.com {
+  encode zstd gzip
+
+  # Optional: only if you terminate client auth at Caddy
+  # tls {
+  #   client_auth {
+  #     mode require_and_verify
+  #     trusted_ca_cert_file /etc/caddy/client-ca.pem
+  #   }
+  # }
+
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "no-referrer"
+    -Server
+  }
+
+  @health path /health
+  handle @health {
+    reverse_proxy stix-api:8080
+  }
+
+  # All non-health endpoints require bearer at API layer too.
+  handle {
+    reverse_proxy stix-api:8080
+  }
+}
