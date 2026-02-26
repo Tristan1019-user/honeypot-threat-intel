@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+data/
+.env
+pipeline_state.json
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/

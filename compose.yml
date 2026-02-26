@@ -1,0 +1,53 @@
+services:
+  threat-intel-api:
+    build: .
+    image: threat-intel-api:local
+    container_name: threat-intel-api
+    restart: unless-stopped
+    mem_limit: 2g
+    cpus: "1.5"
+    depends_on:
+      threat-intel-db:
+        condition: service_healthy
+    volumes:
+      - ./data:/data
+      - ./data/logs:/cowrie/var/log/cowrie:ro
+    ports:
+      - "8099:8099"
+    environment:
+      - DATABASE_URL=postgresql://threatintel:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@threat-intel-db:5432/threat_intel
+      - OLLAMA_URL=${OLLAMA_URL:-http://192.168.10.97:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-mistral-small3.2:24b}
+      - ADMIN_TOKEN=${ADMIN_TOKEN}
+      - VT_API_KEY=${VT_API_KEY:-}
+      - ALLOW_SQLITE_FALLBACK=false
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8099/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  threat-intel-db:
+    image: postgres:16-alpine
+    container_name: threat-intel-db
+    restart: unless-stopped
+    mem_limit: 2g
+    cpus: "1.0"
+    shm_size: 256m
+    environment:
+      - POSTGRES_DB=threat_intel
+      - POSTGRES_USER=threatintel
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U threatintel -d threat_intel"]
+      interval: 10s
+      timeout: 5s
+      retries: 10

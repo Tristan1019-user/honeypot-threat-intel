@@ -1,0 +1,70 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: threat_intel
+          POSTGRES_USER: threatintel
+          POSTGRES_PASSWORD: threatintel_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U threatintel -d threat_intel"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      - name: Lint (ruff)
+        run: ruff check app tests
+
+      - name: Type check (mypy app)
+        run: mypy app
+
+      - name: Tests (pytest)
+        env:
+          PYTHONPATH: .
+        run: pytest -q
+
+      - name: API smoke (Postgres)
+        env:
+          PYTHONPATH: .
+        run: |
+          python - <<'PY'
+          import os, subprocess, time, urllib.request
+          env = os.environ.copy()
+          env['DATABASE_URL'] = 'postgresql://threatintel:threatintel_ci@127.0.0.1:5432/threat_intel'
+          env.pop('ALLOW_SQLITE_FALLBACK', None)
+          p = subprocess.Popen(['python','-m','uvicorn','app.main:app','--host','127.0.0.1','--port','8099'], env=env)
+          try:
+            for _ in range(45):
+              try:
+                urllib.request.urlopen('http://127.0.0.1:8099/api/v1/health', timeout=1)
+                break
+              except Exception:
+                time.sleep(1)
+            body = urllib.request.urlopen('http://127.0.0.1:8099/api/v1/db', timeout=5).read().decode()
+            assert 'postgres' in body.lower()
+          finally:
+            p.terminate()
+          PY
