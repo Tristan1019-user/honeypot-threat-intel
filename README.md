@@ -1,5 +1,7 @@
 # Honeypot Threat Intelligence Feed
 
+[![CI](https://github.com/Tristan1019-user/honeypot-threat-intel/actions/workflows/ci.yml/badge.svg)](https://github.com/Tristan1019-user/honeypot-threat-intel/actions/workflows/ci.yml)
+
 Public, AI-assisted SSH honeypot threat intelligence API with STIX 2.1 output and MITRE ATT&CK mappings.
 
 [API](https://threat-intel.101904.xyz) · [Docs](https://threat-intel.101904.xyz/docs) · [OpenAPI](https://threat-intel.101904.xyz/openapi.json)
@@ -53,7 +55,7 @@ curl -s https://threat-intel.101904.xyz/api/v1/stats | jq .
 | GET | `/api/v1/health` | Health check |
 | GET | `/api/v1/startup-check` | Runtime self-check (schema + pipeline state) |
 | GET | `/api/v1/integrity` | STIX bundle integrity hash and feed counters |
-| GET | `/api/v1/feed/revoked` | Revoked indicators feed |
+| GET | `/api/v1/feed/revoked` | Revoked indicators feed (admin/LAN only) |
 | GET | `/taxii2/` | TAXII 2.1 discovery |
 | GET | `/taxii2/collections` | TAXII collection metadata |
 | GET | `/taxii2/collections/{id}/objects` | TAXII STIX objects |

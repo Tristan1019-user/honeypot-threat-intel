@@ -16,7 +16,7 @@ services:
       - "8099:8099"
     environment:
       - DATABASE_URL=postgresql://threatintel:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@threat-intel-db:5432/threat_intel
-      - OLLAMA_URL=${OLLAMA_URL:-http://192.168.10.97:11434}
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-mistral-small3.2:24b}
       - ADMIN_TOKEN=${ADMIN_TOKEN}
       - VT_API_KEY=${VT_API_KEY:-}

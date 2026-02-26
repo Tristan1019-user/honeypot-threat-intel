@@ -251,7 +251,6 @@ They are best used as supplementary threat intelligence alongside other sources.
     openapi_url="/openapi.json",
 )
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, cast(Any, _rate_limit_exceeded_handler))
 
 app.add_middleware(
     CORSMiddleware,
@@ -1135,7 +1134,7 @@ async def _stix_bundle_stream():
 
 
 @app.get("/api/v1/feed/stix", tags=["Feed"])
-@limiter.limit("10/minute")
+@limiter.limit("30/minute")
 async def feed_stix(request: Request):
     """Full STIX 2.1 bundle — streamed directly from the DB.
 
