@@ -118,6 +118,16 @@ def health():
     return {"ok": True, "version": "v2.2"}
 
 
+
+@app.get("/")
+def root():
+    return {"service": "threat-intel-api", "ok": True, "version": "v2.2"}
+
+
+@app.get("/api/v1/health")
+def health_v1_compat():
+    return {"ok": True, "version": "v2.2", "compat": "api_v1"}
+
 @app.get("/objects")
 @limiter.limit(RATE_LIMIT)
 def list_objects(
