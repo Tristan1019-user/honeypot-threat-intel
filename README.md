@@ -14,7 +14,7 @@ This project ingests Cowrie SSH honeypot logs and turns raw attacker activity in
 
 Pipeline:
 1. Assemble raw Cowrie events into full attacker sessions
-2. Classify behavior using a local LLM (Mistral Small 3.2 via Ollama) with deterministic fallback logic
+2. Classify behavior using a local LLM (GPT-OSS 20B via llama.cpp) with deterministic fallback logic
 3. Map sessions to MITRE ATT&CK techniques
 4. Publish indicators as JSON/CSV/STIX 2.1
 
@@ -30,7 +30,7 @@ curl -s https://threat-intel.101904.xyz/api/v1/feed?since=24h | jq .
 curl -s https://threat-intel.101904.xyz/api/v1/feed/stix -o threat-intel.json
 
 # CSV export
-curl -s "https://threat-intel.101904.xyz/api/v1/feed?format=csv&since=7d" -o indicators.csv
+curl -s "https://threat-intel.101904.xyz/api/v1/feed?output_format=csv&since=7d" -o indicators.csv
 
 # Sessions
 curl -s https://threat-intel.101904.xyz/api/v1/sessions?limit=10 | jq .
@@ -121,7 +121,7 @@ curl "http://localhost:8099/api/v1/pipeline/run?log_path=/cowrie/var/log/cowrie/
 
 - Docker + Docker Compose
 - Cowrie (or compatible Cowrie JSON logs)
-- Ollama (optional; fallback classification is built in)
+- llama.cpp server (optional; rule-based fallback classification is built in)
 
 ## CI / Quality Gates
 

@@ -11,6 +11,15 @@ It is intended for enrichment, triage, and defensive research — not sole-sourc
 - Internal/private IP topology is scrubbed from outward-facing payloads.
 - Credentials are never intentionally exposed by API responses.
 
+## Admin endpoint access
+Admin endpoints are restricted to direct LAN/localhost connections — requests arriving via
+a reverse proxy (identified by `X-Forwarded-For`, `cf-connecting-ip`, or `x-real-ip` headers)
+are rejected with 403 regardless of any token.
+
+Set `ADMIN_TOKEN` in `.env` to require a Bearer token on top of the LAN check.
+**Without `ADMIN_TOKEN`, any LAN host can reach admin endpoints** — set it if your LAN
+threat model requires token authentication (recommended for shared networks).
+
 ## Secret handling
 - Do **not** commit secrets (API keys, passwords, tokens) to git.
 - Use runtime env (`.env`) only.

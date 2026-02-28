@@ -64,7 +64,7 @@ API_VERSION = "1.5.0"
 
 
 
-MODEL_VERSION = "mistral-small3.2:24b"
+MODEL_VERSION = "gpt-oss-20b-Q4_K_M"
 
 # parse_since() lives in app.utils — imported above.
 
@@ -160,6 +160,23 @@ def _cache_headers(etag: str, max_age: int = 300, last_modified: Optional[str] =
 
 # --- App lifecycle ---
 
+
+
+# --- Security headers middleware ---
+
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Removes server fingerprinting and adds defence-in-depth headers."""
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Server"] = "honeypot-threat-intel"
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.init_pool()
@@ -177,7 +194,7 @@ app = FastAPI(
 
 ## Overview
 This API publishes IOCs (Indicators of Compromise) observed on a live SSH honeypot.
-Attack sessions are classified using a local LLM (Mistral Small 3.2) and mapped to
+Attack sessions are classified using a local LLM (GPT-OSS 20B via llama.cpp) and mapped to
 MITRE ATT&CK techniques. Data is available in JSON, CSV, and STIX 2.1 bundle formats.
 
 ## Scoring Semantics
@@ -192,7 +209,7 @@ Derived from a combination of AI classification and rule-based heuristics:
 | `high` | Malware download or persistent access attempted | 85 | wget/curl, crontab modification, SSH keys |
 | `critical` | Active exploitation, cryptominer, or C2 activity | 95 | Mining pool connections, botnet recruitment |
 
-- **Source**: AI classification (Ollama/Mistral) with rule-based fallback when AI is unavailable
+- **Source**: AI classification (GPT-OSS 20B via llama.cpp) with rule-based fallback when AI is unavailable
 - **Confidence**: Maps directly from threat_level (see table above), also available as `confidence` integer (0-100) in STIX indicators
 - **Impact vs Priority**: threat_level reflects *observed behavior severity*, not victim impact
 
@@ -260,6 +277,7 @@ app.add_middleware(
 )
 # Compression helps large JSON/STIX responses significantly.
 app.add_middleware(GZipMiddleware, minimum_size=1024)
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(quality_router)
 app.include_router(taxii_router)
@@ -607,7 +625,7 @@ curl -sI https://threat-intel.101904.xyz/api/v1/feed | grep -i etag</pre>
             <tr><td><span class="tag tag-high">high</span></td><td>85</td><td>Malware download or persistence</td><td>7 days</td></tr>
             <tr><td><span class="tag tag-crit">critical</span></td><td>95</td><td>Cryptominer, C2, active exploitation</td><td>7 days</td></tr>
         </table>
-        <p style="margin-top:.5rem">Derived from AI (Mistral Small 3.2) + rule-based fallback. Reflects observed severity, not victim impact.</p>
+        <p style="margin-top:.5rem">Derived from AI (GPT-OSS 20B via llama.cpp) + rule-based fallback. Reflects observed severity, not victim impact.</p>
     </div>
 
     <h2>Malware Samples</h2>
@@ -660,6 +678,7 @@ curl -sI https://threat-intel.101904.xyz/api/v1/feed | grep -i etag</pre>
 </div>
 <script>
 const TC={low:'tag-low',medium:'tag-med',high:'tag-high',critical:'tag-crit'};
+const esc=s=>s==null?'':('' + s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 const MITRE_NAMES={T1110:'Brute Force','T1110.001':'Password Guessing','T1110.003':'Password Spraying',T1078:'Valid Accounts','T1059.004':'Unix Shell',T1105:'Tool Transfer',T1496:'Cryptomining',T1082:'System Discovery',T1087:'Account Discovery',T1547:'Persistence',T1021:'SSH',T1133:'External Services',T1070:'Indicator Removal'};
 fetch('/api/v1/stats').then(r=>r.json()).then(d=>{
     document.getElementById('s-sessions').textContent=d.total_sessions||0;
@@ -684,7 +703,7 @@ fetch('/api/v1/stats').then(r=>r.json()).then(d=>{
     const ri=d.recent_indicators||[];
     const ic=document.getElementById('live-indicators');
     if(ri.length){
-        ic.innerHTML=ri.map(i=>`<div class="live-card"><span class="ip">${i.value}</span> <span class="tag ${TC[i.threat_level]||'tag-low'}">${i.threat_level}</span> <span class="bg">${i.type}</span> <span style="color:#666;margin-left:.5rem">seen ${i.times_seen}x · ${i.first_seen?.split('T')[0]||'-'}</span></div>`).join('');
+        ic.innerHTML=ri.map(i=>`<div class="live-card"><span class="ip">${esc(i.value)}</span> <span class="tag ${TC[esc(i.threat_level)]||'tag-low'}">${esc(i.threat_level)}</span> <span class="bg">${esc(i.type)}</span> <span style="color:#666;margin-left:.5rem">seen ${esc(i.times_seen)}x · ${esc(i.first_seen?.split('T')[0]||'-')}</span></div>`).join('');
     }else ic.innerHTML='<div class="live-card" style="color:#555">No indicators yet</div>';
     // Recent sessions
     const rs=d.recent_sessions||[];
@@ -692,7 +711,7 @@ fetch('/api/v1/stats').then(r=>r.json()).then(d=>{
     if(rs.length){
         sc.innerHTML=rs.map(s=>{
             const mt=s.mitre_techniques?JSON.parse(s.mitre_techniques):[];
-            return `<div class="live-card"><span class="ip">${s.src_ip}</span> <span class="tag ${TC[s.threat_level]||'tag-low'}">${s.threat_level}</span> <span class="bg">${s.attack_type||'unknown'}</span>${s.country?' <span style="color:#888">'+s.country+'</span>':''}${s.org?' <span style="color:#666;font-size:.7rem">'+s.org+'</span>':''}${mt.length?' <span style="color:#555;font-size:.7rem">'+mt.join(', ')+'</span>':''}<br><span style="color:#777;font-size:.75rem">${s.summary||''}</span></div>`;
+            return `<div class="live-card"><span class="ip">${esc(s.src_ip)}</span> <span class="tag ${TC[esc(s.threat_level)]||'tag-low'}">${esc(s.threat_level)}</span> <span class="bg">${esc(s.attack_type||'unknown')}</span>${s.country?' <span style="color:#888">'+esc(s.country)+'</span>':''}${s.org?' <span style="color:#666;font-size:.7rem">'+esc(s.org)+'</span>':''}${mt.length?' <span style="color:#555;font-size:.7rem">'+mt.map(esc).join(', ')+'</span>':''}<br><span style="color:#777;font-size:.75rem">${esc(s.summary||'')}</span></div>`;
         }).join('');
     }else sc.innerHTML='<div class="live-card" style="color:#555">No sessions yet</div>';
 }).catch(()=>{});
@@ -834,7 +853,7 @@ async def about(request: Request):
             "redoc": "/redoc",
         },
         "scoring": {
-            "method": "AI classification (Ollama/Mistral Small 3.2) with rule-based fallback",
+            "method": "AI classification (GPT-OSS 20B via llama.cpp) with rule-based fallback",
             "threat_level": {
                 "low": {"confidence": 40, "description": "Failed brute force only, no successful auth"},
                 "medium": {"confidence": 65, "description": "Successful login + post-auth discovery commands"},
